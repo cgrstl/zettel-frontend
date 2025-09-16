@@ -1,117 +1,74 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zettel-KI-Chat</title>
-    <script src="marked.min.js"></script>
-    <style>
-        body { font-family: sans-serif; margin: 0; padding: 20px; background-color: #f4f4f9; }
-        #container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        h1, h2 { color: #333; }
-        select, input, button { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 4px; border: 1px solid #ddd; box-sizing: border-box; }
-        button { background-color: #007bff; color: white; border: none; cursor: pointer; }
-        button:hover { background-color: #0056b3; }
-        #answer { margin-top: 20px; padding: 15px; background-color: #e9ecef; border-radius: 4px; min-height: 50px; white-space: normal; }
-        #answer p, #answer ul, #answer ol { margin-top: 0; margin-bottom: 1em; }
-        #answer li { margin-left: 1.5em; }
-    </style>
+    <title>Zettel AI Hub</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
 </head>
 <body>
 
-    <div id="container">
-        <h1>Zettel-KI-Chat</h1>
+    <div class="main-container">
+        <div class="sidebar" id="library-panel">
+            <div class="panel-header">
+                <span class="material-symbols-outlined">source_notes</span>
+                Library
+            </div>
+            <div class="panel-content" id="files-list">
+                </div>
+        </div>
 
-        <h2>1. Gespeicherte Notizen</h2>
-        <select id="file-select">
-            <option>Lade Notizen...</option>
-        </select>
-        <button onclick="loadFiles()">Notizen neu laden</button>
+        <div class="chat-list-panel">
+            <div class="panel-header">
+                <span class="material-symbols-outlined">chat</span>
+                Chats
+            </div>
+            <div class="button-container">
+                <button onclick="startNewChat(false)" class="button-secondary">
+                    <span class="material-symbols-outlined">add_comment</span>
+                    New General Chat
+                </button>
+                <button onclick="showFocusPromptModal()" class="button-primary">
+                    <span class="material-symbols-outlined">filter_alt</span>
+                    New Focused Chat
+                </button>
+            </div>
+            <div class="panel-content" id="chat-history-list">
+                </div>
+        </div>
 
-        <hr style="margin: 20px 0;">
-
-        <h2>2. Stelle eine Frage</h2>
-        <input type="text" id="question-input" placeholder="Stelle eine Frage zu der ausgewählten Notiz...">
-        <button onclick="askQuestion()">Frage an KI senden</button>
-
-        <h2>3. Antwort der KI</h2>
-        <div id="answer">Hier wird die Antwort der KI erscheinen...</div>
+        <div class="chat-panel">
+            <div class="chat-window" id="chat-window">
+                </div>
+            <div class="chat-input-area">
+                <div class="input-wrapper">
+                    <textarea id="chat-input" placeholder="Enter a prompt here" onkeydown="handleTextareaKey(event)" oninput="autoGrow(this)"></textarea>
+                    <button onclick="sendMessage()" class="button-primary" aria-label="Send Message">
+                        <span class="material-symbols-outlined">send</span>
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <script>
-        const SERVER_URL = 'http://127.0.0.1:8080';
+    <div class="modal-backdrop" id="focus-prompt-modal">
+        <div class="modal-content">
+            <h2>Create a Focused Chat</h2>
+            <p>Define the thematic focus for this conversation (e.g., "Discuss pros and cons of nuclear energy").</p>
+            <textarea id="focus-prompt-text" placeholder="Focus prompt..."></textarea>
+            <div class="modal-buttons">
+                <button onclick="hideFocusPromptModal()" class="button-secondary">Cancel</button>
+                <button onclick="saveFocusPrompt()" class="button-primary">Start Chat</button>
+            </div>
+        </div>
+    </div>
 
-        // Funktion, um die Liste der Dateien vom Server zu laden
-        async function loadFiles() {
-            const select = document.getElementById('file-select');
-            select.innerHTML = '<option>Lade...</option>';
-            try {
-                const response = await fetch(`${SERVER_URL}/files`);
-                const data = await response.json();
-                
-                if (data.status === 'success' && data.files.length > 0) {
-                    select.innerHTML = ''; // Leere die Liste
-                    data.files.forEach(file => {
-                        const option = document.createElement('option');
-                        option.value = file;
-                        option.textContent = file;
-                        select.appendChild(option);
-                    });
-                } else if (data.files.length === 0) {
-                     select.innerHTML = `<option>Noch keine Notizen gespeichert</option>`;
-                } else {
-                    select.innerHTML = `<option>Fehler: ${data.message}</option>`;
-                }
-            } catch (error) {
-                console.error("Fehler beim Laden der Dateien:", error);
-                select.innerHTML = '<option>Fehler: Server nicht erreichbar</option>';
-            }
-        }
-
-        // Funktion, um eine Frage an die KI zu senden
-        async function askQuestion() {
-            const select = document.getElementById('file-select');
-            const questionInput = document.getElementById('question-input');
-            const answerDiv = document.getElementById('answer');
-
-            const filename = select.value;
-            const question = questionInput.value;
-
-            if (!filename || filename.startsWith('Fehler') || filename.startsWith('Noch keine')) {
-                answerDiv.textContent = "Bitte eine gültige Notiz auswählen.";
-                return;
-            }
-            if (!question) {
-                answerDiv.textContent = "Bitte eine Frage stellen.";
-                return;
-            }
-
-            answerDiv.innerHTML = "<em>Denke nach...</em>";
-
-            try {
-                const response = await fetch(`${SERVER_URL}/chat`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ filename, question })
-                });
-
-                const data = await response.json();
-
-                if (data.status === 'success') {
-                    // Wandle die Markdown-Antwort in HTML um
-                    answerDiv.innerHTML = marked.parse(data.answer);
-                } else {
-                    answerDiv.textContent = `Fehler vom Server: ${data.message}`;
-                }
-            } catch (error) {
-                console.error("Fehler bei der Chat-Anfrage:", error);
-                answerDiv.textContent = 'Fehler: Server nicht erreichbar.';
-            }
-        }
-
-        // Lade die Dateien direkt beim Start der Seite
-        window.onload = loadFiles;
-    </script>
+    <script src="script.js"></script>
+    <script src="marked.min.js"></script>
 
 </body>
 </html>
