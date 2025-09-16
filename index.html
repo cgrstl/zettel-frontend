@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zettel-KI-Chat</title>
+    <script src="marked.min.js"></script>
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 20px; background-color: #f4f4f9; }
+        #container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, h2 { color: #333; }
+        select, input, button { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 4px; border: 1px solid #ddd; box-sizing: border-box; }
+        button { background-color: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        #answer { margin-top: 20px; padding: 15px; background-color: #e9ecef; border-radius: 4px; min-height: 50px; white-space: normal; }
+        #answer p, #answer ul, #answer ol { margin-top: 0; margin-bottom: 1em; }
+        #answer li { margin-left: 1.5em; }
+    </style>
+</head>
+<body>
+
+    <div id="container">
+        <h1>Zettel-KI-Chat</h1>
+
+        <h2>1. Gespeicherte Notizen</h2>
+        <select id="file-select">
+            <option>Lade Notizen...</option>
+        </select>
+        <button onclick="loadFiles()">Notizen neu laden</button>
+
+        <hr style="margin: 20px 0;">
+
+        <h2>2. Stelle eine Frage</h2>
+        <input type="text" id="question-input" placeholder="Stelle eine Frage zu der ausgewählten Notiz...">
+        <button onclick="askQuestion()">Frage an KI senden</button>
+
+        <h2>3. Antwort der KI</h2>
+        <div id="answer">Hier wird die Antwort der KI erscheinen...</div>
+    </div>
+
+    <script>
+        const SERVER_URL = 'http://127.0.0.1:8080';
+
+        // Funktion, um die Liste der Dateien vom Server zu laden
+        async function loadFiles() {
+            const select = document.getElementById('file-select');
+            select.innerHTML = '<option>Lade...</option>';
+            try {
+                const response = await fetch(`${SERVER_URL}/files`);
+                const data = await response.json();
+                
+                if (data.status === 'success' && data.files.length > 0) {
+                    select.innerHTML = ''; // Leere die Liste
+                    data.files.forEach(file => {
+                        const option = document.createElement('option');
+                        option.value = file;
+                        option.textContent = file;
+                        select.appendChild(option);
+                    });
+                } else if (data.files.length === 0) {
+                     select.innerHTML = `<option>Noch keine Notizen gespeichert</option>`;
+                } else {
+                    select.innerHTML = `<option>Fehler: ${data.message}</option>`;
+                }
+            } catch (error) {
+                console.error("Fehler beim Laden der Dateien:", error);
+                select.innerHTML = '<option>Fehler: Server nicht erreichbar</option>';
+            }
+        }
+
+        // Funktion, um eine Frage an die KI zu senden
+        async function askQuestion() {
+            const select = document.getElementById('file-select');
+            const questionInput = document.getElementById('question-input');
+            const answerDiv = document.getElementById('answer');
+
+            const filename = select.value;
+            const question = questionInput.value;
+
+            if (!filename || filename.startsWith('Fehler') || filename.startsWith('Noch keine')) {
+                answerDiv.textContent = "Bitte eine gültige Notiz auswählen.";
+                return;
+            }
+            if (!question) {
+                answerDiv.textContent = "Bitte eine Frage stellen.";
+                return;
+            }
+
+            answerDiv.innerHTML = "<em>Denke nach...</em>";
+
+            try {
+                const response = await fetch(`${SERVER_URL}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename, question })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    // Wandle die Markdown-Antwort in HTML um
+                    answerDiv.innerHTML = marked.parse(data.answer);
+                } else {
+                    answerDiv.textContent = `Fehler vom Server: ${data.message}`;
+                }
+            } catch (error) {
+                console.error("Fehler bei der Chat-Anfrage:", error);
+                answerDiv.textContent = 'Fehler: Server nicht erreichbar.';
+            }
+        }
+
+        // Lade die Dateien direkt beim Start der Seite
+        window.onload = loadFiles;
+    </script>
+
+</body>
+</html>
